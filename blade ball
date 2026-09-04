@@ -11,6 +11,12 @@ local AutoCurveEnabled = true
 local LastParryTime = 0
 local WasTarget = false
 
+-- Ek Güvenlik ve Rastgeleleştirme Parametreleri
+local AntiDetection = {
+    MinDelay = 0.012,
+    MaxDelay = 0.028,
+}
+
 -- ESP için çizim (Drawing API)
 local espText = Drawing.new("Text")
 espText.Size = 18
@@ -19,22 +25,26 @@ espText.Outline = true
 espText.Color = Color3.fromRGB(255, 50, 50)
 espText.Visible = false
 
-local function humanizedParry()
-   VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-   task.wait(math.random(8, 18) / 1000)
-   VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+-- Geliştirilmiş İnsanlaştırılmış Parry (Rastgele gecikme)
+local function humanizedParrySecure()
+    local randomWait = math.random(AntiDetection.MinDelay * 1000, AntiDetection.MaxDelay * 1000) / 1000
+    task.wait(randomWait)
+    
+    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+    task.wait(math.random(6, 12) / 1000)
+    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
 end
 
 -- Topa vurulduğu anda hafif kavis/falso etkisi verme fonksiyonu
 local function applyAutoCurve()
-   if not AutoCurveEnabled then return end
-   local character = LocalPlayer.Character
-   if not character then return end
-   local hrp = character:FindFirstChild("HumanoidRootPart")
-   if not hrp then return end
-   
-   local randomOffset = math.random(1, 2) == 1 and 1 or -1
-   Camera.CFrame = Camera.CFrame * CFrame.Angles(0, math.rad(randomOffset * 12), 0)
+    if not AutoCurveEnabled then return end
+    local character = LocalPlayer.Character
+    if not character then return end
+    local hrp = character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    
+    local randomOffset = math.random(1, 2) == 1 and 1 or -1
+    Camera.CFrame = Camera.CFrame * CFrame.Angles(0, math.rad(randomOffset * 12), 0)
 end
 
 local Success, Rayfield = pcall(function()
@@ -42,110 +52,112 @@ local Success, Rayfield = pcall(function()
 end)
 
 if Success and Rayfield then
-   local Window = Rayfield:CreateWindow({
-      Name = "SarsX Hub | Blade Ball",
-      LoadingTitle = "SarsX Hub Başlatılıyor...",
-      LoadingSubtitle = "SarsX Systems",
-      ConfigurationSaving = { Enabled = false },
-   })
-   
-   local Tab = Window:CreateTab("SarsX Combat", 4483362458)
-   
-   Tab:CreateToggle({
-      Name = "Safe Auto Parry",
-      CurrentValue = false,
-      Callback = function(Value)
-         AutoParryEnabled = Value
-      end,
-   })
+    local Window = Rayfield:CreateWindow({
+       Name = "SarsX Hub | Blade Ball",
+       LoadingTitle = "SarsX Hub Başlatılıyor...",
+       LoadingSubtitle = "SarsX Systems",
+       ConfigurationSaving = { Enabled = false },
+    })
+    
+    local Tab = Window:CreateTab("SarsX Combat", 4483362458)
+    
+    Tab:CreateToggle({
+       Name = "Safe Auto Parry",
+       CurrentValue = false,
+       Callback = function(Value)
+          AutoParryEnabled = Value
+       end,
+    })
 
-   Tab:CreateToggle({
-      Name = "Target ESP (Hedef Göstergesi)",
-      CurrentValue = true,
-      Callback = function(Value)
-         EspEnabled = Value
-         if not Value then
-            espText.Visible = false
-         end
-      end,
-   })
+    Tab:CreateToggle({
+       Name = "Target ESP (Hedef Göstergesi)",
+       CurrentValue = true,
+       Callback = function(Value)
+          EspEnabled = Value
+          if not Value then
+             espText.Visible = false
+          end
+       end,
+    })
 
-   Tab:CreateToggle({
-      Name = "Auto Curve (Otomatik Falso)",
-      CurrentValue = true,
-      Callback = function(Value)
-         AutoCurveEnabled = Value
-      end,
-   })
+    Tab:CreateToggle({
+       Name = "Auto Curve (Otomatik Falso)",
+       CurrentValue = true,
+       Callback = function(Value)
+          AutoCurveEnabled = Value
+       end,
+    })
 end
 
 -- Topu bulan fonksiyon
 local function getBall()
-   local ballsFolder = Workspace:FindFirstChild("Balls")
-   if ballsFolder then
-      for _, b in ipairs(ballsFolder:GetChildren()) do
-         if b:IsA("BasePart") then return b end
-      end
-   end
-   for _, obj in ipairs(Workspace:GetChildren()) do
-      if obj.Name == "Ball" and obj:IsA("BasePart") then return obj end
-   end
-   return nil
+    local ballsFolder = Workspace:FindFirstChild("Balls")
+    if ballsFolder then
+       for _, b in ipairs(ballsFolder:GetChildren()) do
+          if b:IsA("BasePart") then return b end
+       end
+    end
+    for _, obj in ipairs(Workspace:GetChildren()) do
+       if obj.Name == "Ball" and obj:IsA("BasePart") then return obj end
+    end
+    return nil
 end
 
 -- Ana Döngü (Parry + ESP + Auto Curve)
 RunService.Heartbeat:Connect(function()
-   local ball = getBall()
-   
-   -- ESP İşlemleri
-   if EspEnabled and ball then
-      local targetName = ball:GetAttribute("target")
-      if targetName then
-         local vector, onScreen = Camera:WorldToViewportPoint(ball.Position)
-         if onScreen then
-            espText.Position = Vector2.new(vector.X, vector.Y - 25)
-            if targetName == LocalPlayer.Name then
-               espText.Text = "🚨 SARSX: HEDEF SENİN! 🚨"
-               espText.Color = Color3.fromRGB(255, 0, 0)
-            else
-               espText.Text = "SarsX Target: " .. targetName
-               espText.Color = Color3.fromRGB(255, 165, 0)
-            end
-            espText.Visible = true
-         else
-            espText.Visible = false
-         end
-      else
-         espText.Visible = false
-      end
-   else
-      espText.Visible = false
-   end
+    local ball = getBall()
+    
+    -- ESP İşlemleri
+    if EspEnabled and ball then
+       local targetName = ball:GetAttribute("target")
+       if targetName then
+          local vector, onScreen = Camera:WorldToViewportPoint(ball.Position)
+          if onScreen then
+             espText.Position = Vector2.new(vector.X, vector.Y - 25)
+             if targetName == LocalPlayer.Name then
+                espText.Text = "🚨 SARSX: HEDEF SENİN! 🚨"
+                espText.Color = Color3.fromRGB(255, 0, 0)
+             else
+                espText.Text = "SarsX Target: " .. targetName
+                espText.Color = Color3.fromRGB(255, 165, 0)
+             end
+             espText.Visible = true
+          else
+             espText.Visible = false
+          end
+       else
+          espText.Visible = false
+       end
+    else
+       espText.Visible = false
+    end
 
-   -- Auto Parry ve Auto Curve İşlemleri
-   if not AutoParryEnabled or not ball then return end
-   
-   local character = LocalPlayer.Character
-   if not character then return end
-   local hrp = character:FindFirstChild("HumanoidRootPart")
-   local hum = character:FindFirstChild("Humanoid")
-   if not hrp or not hum or hum.Health <= 0 then return end
-   
-   local isTargetMe = (ball:GetAttribute("target") == LocalPlayer.Name)
-   
-   if isTargetMe then
-      local distance = (ball.Position - hrp.Position).Magnitude
-      local speed = ball.AssemblyLinearVelocity.Magnitude
-      
-      local safeThreshold = 14 + (speed / 3.0)
-      
-      if distance <= safeThreshold then
-         local now = tick()
-         if now - LastParryTime > 0.15 then
-            LastParryTime = now
-            humanizedParry()
-            applyAutoCurve()
-         end
-      end
-   end
+    -- Auto Parry ve Auto Curve İşlemleri
+    if not AutoParryEnabled or not ball then return end
+    
+    local character = LocalPlayer.Character
+    if not character then return end
+    local hrp = character:FindFirstChild("HumanoidRootPart")
+    local hum = character:FindFirstChild("Humanoid")
+    if not hrp or not hum or hum.Health <= 0 then return end
+    
+    local isTargetMe = (ball:GetAttribute("target") == LocalPlayer.Name)
+    
+    if isTargetMe then
+       local distance = (ball.Position - hrp.Position).Magnitude
+       local speed = ball.AssemblyLinearVelocity.Magnitude
+       
+       -- Mesafe hesaplamalarına yapay hata (jitter) ekleme
+       local jitter = math.random(-2, 2) * 0.1
+       local safeThreshold = 14 + (speed / 3.0) + jitter
+       
+       if distance <= safeThreshold then
+          local now = tick()
+          if now - LastParryTime > 0.15 then
+             LastParryTime = now
+             humanizedParrySecure()
+             applyAutoCurve()
+          end
+       end
+    end
 end)
